@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import pathlib
 import pandas as pd
 import google.generativeai as genai
-from google.generativeai import types
+# Removed: from google.generativeai import types # No longer needed for genai.upload_file
 import shutil
 import os
 from dotenv import load_dotenv
@@ -122,7 +122,7 @@ async def upload_file(file: UploadFile = File(...)):
             model = genai.GenerativeModel('gemini-2.5-flash')
             response = model.generate_content(
                 contents=[
-                    types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
+                    genai.upload_file(data=file_bytes, mime_type=mime_type), # Use genai.upload_file
                     PROMPT
                 ]
             )
