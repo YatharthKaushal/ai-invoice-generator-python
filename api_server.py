@@ -1,48 +1,38 @@
 # uvicorn api_server:app --reload --port 8000
 
-# api_server.py
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+import json
 import pathlib
 import pandas as pd
 import google.generativeai as genai
-from google.generativeai import types # Keep this import for types.Part.from_data
-import shutil
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
 app = FastAPI()
 
-# --- CORS Configuration ---
-# Get frontend URL from environment variable
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173") # Default for local development
-
-origins = [
-    FRONTEND_URL,
-    # Add other frontend URLs if you have multiple, e.g.,
-    # "https://your-production-frontend.vercel.app",
-    # "https://another-staging-frontend.vercel.app",
-]
-
+# CORS Configuration
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+origins = [FRONTEND_URL]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"], # You can restrict this to ["GET", "POST", "PUT", "DELETE"] for more security
-    allow_headers=["*"], # You can restrict this to specific headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-# --- End CORS Configuration ---
 
 MIME_MAP = {
     '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg',
     '.png': 'image/png',
-    '.pdf': 'application/pdf' # Ensure PDF MIME type is correct for multimodal
+    '.pdf': 'application/pdf'
 }
+
 PROMPT = """
 You are a data extraction specialist. Extract the following information:
 1. Names of people/employees
@@ -66,18 +56,12 @@ Required JSON format:
 }
 If you cannot extract certain information, use null for missing values.
 """
-UPLOAD_DIR = "uploads" # This directory is actually not used since we process in-memory
-os.makedirs(UPLOAD_DIR, exist_ok=True) # This line can be removed as the directory isn't used
 
-# --- Gemini API Key Setup ---
-# Get Gemini API Key from environment variable
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") # Removed the hardcoded default key
+# Gemini API Key Setup
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY environment variable not set.")
-
-# Configure the genai library with your API key
 genai.configure(api_key=GEMINI_API_KEY)
-# ---------------------------
 
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...)):
@@ -95,33 +79,20 @@ async def upload_file(file: UploadFile = File(...)):
     try:
         if ext == '.xlsx':
             print("Processing as XLSX...")
-            # Read directly from the UploadFile object's file-like object
             df = pd.read_excel(file.file)
             csv_text = df.to_csv(index=False)
             full_prompt = f"{PROMPT}\n\nSpreadsheet data:\n{csv_text}"
-            
-            # Access the model directly
-            model = genai.GenerativeModel('gemini-2.5-flash')
-            response = model.generate_content(
-                contents=[full_prompt]
-            )
+            model = genai.GenerativeModel('gemini-1.5-flash')  # Updated model name
+            response = model.generate_content(full_prompt)
         else:
             print(f"Processing as {ext} with MIME type {MIME_MAP[ext]}...")
-            mime_type = MIME_MAP[ext]
-            # Read bytes directly from the UploadFile object's file-like object
-            file_bytes = await file.read() # Use await for async read
-            
-            # Access the model directly
-            model = genai.GenerativeModel('gemini-2.5-flash')
-            response = model.generate_content(
-                contents=[
-                    # Correct way to pass in-memory bytes for multimodal input
-                    types.Part.from_data(data=file_bytes, mime_type=mime_type), # Use from_data for raw bytes
-                    PROMPT
-                ]
-            )
+            file_bytes = await file.read()
+            model = genai.GenerativeModel('gemini-1.5-flash')  # Updated model name
+            response = model.generate_content([
+                {"mime_type": MIME_MAP[ext], "data": file_bytes},  # Updated format for file bytes
+                PROMPT
+            ])
         print("Gemini response received.")
-        # Attempt to parse response.text as JSON
         try:
             json_result = json.loads(response.text)
             print("Gemini response parsed as JSON:", json_result)
