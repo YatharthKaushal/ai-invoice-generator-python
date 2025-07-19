@@ -1,4 +1,3 @@
-```python
 # uvicorn api_server:app --reload --port 8000
 
 # api_server.py
@@ -133,4 +132,3 @@ async def upload_file(file: UploadFile = File(...)):
     except Exception as e:
         print("UPLOAD ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
-```
