@@ -6,11 +6,11 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import pathlib
 import pandas as pd
-from google import genai
-from google.genai import types
+import google.generativeai as genai # <-- Change this line
+from google.generativeai import types # <-- This is correct
 import shutil
 import os
-from dotenv import load_dotenv # Import load_dotenv
+from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
