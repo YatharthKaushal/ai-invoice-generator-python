@@ -1,3 +1,4 @@
+```python
 # uvicorn api_server:app --reload --port 8000
 
 # api_server.py
@@ -6,8 +7,8 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import pathlib
 import pandas as pd
-import google.generativeai as genai # <-- Change this line
-from google.generativeai import types # <-- This is correct
+import google.generativeai as genai
+from google.generativeai import types
 import shutil
 import os
 from dotenv import load_dotenv
@@ -71,10 +72,12 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # --- Gemini API Key Setup ---
 # Get Gemini API Key from environment variable
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or "AIzaSyBw8r_4jXeuxeMiUW2-AfaBJg_wfG5Z0qg"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") # It's better not to hardcode a default key directly in the code
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY environment variable not set.")
-client = genai.Client(api_key=GEMINI_API_KEY)
+
+# Configure the genai library with your API key
+genai.configure(api_key=GEMINI_API_KEY)
 # ---------------------------
 
 @app.post("/upload/")
@@ -104,8 +107,10 @@ async def upload_file(file: UploadFile = File(...)):
             df = pd.read_excel(file.file)
             csv_text = df.to_csv(index=False)
             full_prompt = f"{PROMPT}\n\nSpreadsheet data:\n{csv_text}"
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
+            
+            # Access the model directly
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            response = model.generate_content(
                 contents=[full_prompt]
             )
         else:
@@ -113,8 +118,10 @@ async def upload_file(file: UploadFile = File(...)):
             mime_type = MIME_MAP[ext]
             # Read bytes directly from the UploadFile object's file-like object
             file_bytes = await file.read() # Use await for async read
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
+            
+            # Access the model directly
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            response = model.generate_content(
                 contents=[
                     types.Part.from_bytes(data=file_bytes, mime_type=mime_type),
                     PROMPT
@@ -126,3 +133,4 @@ async def upload_file(file: UploadFile = File(...)):
     except Exception as e:
         print("UPLOAD ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
+```
