@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import pathlib
 import pandas as pd
 import google.generativeai as genai
-# Removed: from google.generativeai import types # No longer needed for genai.upload_file
+from google.generativeai import types # Keep this import for types.Part.from_data
 import shutil
 import os
 from dotenv import load_dotenv
@@ -41,7 +41,7 @@ MIME_MAP = {
     '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg',
     '.png': 'image/png',
-    '.pdf': 'application/pdf'
+    '.pdf': 'application/pdf' # Ensure PDF MIME type is correct for multimodal
 }
 PROMPT = """
 You are a data extraction specialist. Extract the following information:
@@ -66,12 +66,12 @@ Required JSON format:
 }
 If you cannot extract certain information, use null for missing values.
 """
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+UPLOAD_DIR = "uploads" # This directory is actually not used since we process in-memory
+os.makedirs(UPLOAD_DIR, exist_ok=True) # This line can be removed as the directory isn't used
 
 # --- Gemini API Key Setup ---
 # Get Gemini API Key from environment variable
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") # It's better not to hardcode a default key directly in the code
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") # Removed the hardcoded default key
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY environment variable not set.")
 
@@ -92,13 +92,6 @@ async def upload_file(file: UploadFile = File(...)):
         print(f"Unsupported file type: {ext}")
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
-    # Use a temporary file path instead of saving to 'uploads' directory
-    # Serverless functions often have read-only file systems or limited storage.
-    # The 'uploads' directory might not persist between invocations.
-    # A better approach for serverless is to process the file directly from memory
-    # or use cloud storage like AWS S3 or Google Cloud Storage if persistence is needed.
-    # For this simple case, we can process directly from the UploadFile.
-    
     try:
         if ext == '.xlsx':
             print("Processing as XLSX...")
@@ -122,13 +115,21 @@ async def upload_file(file: UploadFile = File(...)):
             model = genai.GenerativeModel('gemini-2.5-flash')
             response = model.generate_content(
                 contents=[
-                    genai.upload_file(data=file_bytes, mime_type=mime_type), # Use genai.upload_file
+                    # Correct way to pass in-memory bytes for multimodal input
+                    types.Part.from_data(data=file_bytes, mime_type=mime_type), # Use from_data for raw bytes
                     PROMPT
                 ]
             )
         print("Gemini response received.")
-        print("Gemini response text:", response.text)
-        return JSONResponse(content={"result": response.text})
+        # Attempt to parse response.text as JSON
+        try:
+            json_result = json.loads(response.text)
+            print("Gemini response parsed as JSON:", json_result)
+            return JSONResponse(content={"result": json_result})
+        except json.JSONDecodeError:
+            print("Gemini response is not valid JSON. Returning raw text.")
+            return JSONResponse(content={"result": response.text})
+
     except Exception as e:
         print("UPLOAD ERROR:", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
